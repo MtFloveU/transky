@@ -2,6 +2,15 @@ name: Build ebook
 
 on:
   workflow_dispatch:
+    inputs:
+      volume:
+        description: '要构建的卷 (all 或 04)'
+        required: true
+        default: '04'
+        type: choice
+        options:
+        - all
+        - 04
   workflow_call:
   pull_request:
 
@@ -15,6 +24,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,15 +38,29 @@ jobs:
       - name: Print flake metadata
         run: nix flake metadata --accept-flake-config
 
+      - name: Prepare SUMMARY for Volume 4
+        run: |
+          if [ "${{ github.event.inputs.volume }}" = "04" ] || [ -z "${{ github.event.inputs.volume }}" ]; then
+            echo "正在使用 SUMMARY-4.md 构建第四卷..."
+            cp src/SUMMARY-4.md src/SUMMARY.md
+            # 修改书名，添加“第四卷”标识（推荐）
+            sed -i 's/药娘的天空/药娘的天空 - 第四卷 · 抓不住的幸福/g' src/about.md || true
+          else
+            echo "使用完整版 SUMMARY.md"
+          fi
+
       - name: Build
         run: |
-          sed -e "s/BUILD_TIME/$(TZ=Asia/Shanghai date -Isecond)/" -e "s/COMMIT_SHA/${{ github.sha }}/" -i src/about.md
+          # 更新构建时间和 commit 信息
+          sed -e "s/BUILD_TIME/$(TZ=Asia/Shanghai date -Isecond)/" \
+              -e "s/COMMIT_SHA/${{ github.sha }}/" -i src/about.md
+          
           NIXPKGS_ALLOW_UNFREE=1 nix build .# --impure --accept-flake-config
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ebook
+          name: ebook-vol4
           path: |
             result/share/transky-book/book/epub/药娘的天空.epub
             result/share/transky-book/book/mobi/药娘的天空.mobi
